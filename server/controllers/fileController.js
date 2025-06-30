@@ -78,22 +78,62 @@ exports.createFile = async (req, res) => {
     }
 };
 // Update a file (renaming or content change)
+// In controllers/fileController.js...
+
+// UPDATE an item (file content, or a file/folder RENAME)
 exports.updateFile = async (req, res) => {
     try {
-        // Note: Complex folder renames (moving all children) are not handled here yet.
-        // This is primarily for file content/name updates.
-        const updatedFile = await File.findByIdAndUpdate(
-            req.params.id,
-            { $set: req.body },
-            { new: true }
-        );
-        if (!updatedFile) return res.status(404).json({ message: 'File not found' });
-        res.json(updatedFile);
+        const itemToUpdate = await File.findById(req.params.id);
+        if (!itemToUpdate) return res.status(404).json({ message: 'Item not found' });
+        
+        const newValues = req.body;
+
+        // --- RECURSIVE RENAME LOGIC ---
+        // If the name is changing AND it's a folder, we must rename all children.
+        if (newValues.name && newValues.name !== itemToUpdate.name && itemToUpdate.type === 'folder') {
+            const oldPath = itemToUpdate.name;
+            const newPath = newValues.name;
+
+            // Find all descendants of the folder
+            const descendants = await File.find({ name: { $regex: `^${oldPath}/` } });
+
+            // Create an array of update operations to perform in a single transaction
+            const updateOps = descendants.map(doc => ({
+                updateOne: {
+                    filter: { _id: doc._id },
+                    update: { $set: { name: doc.name.replace(oldPath, newPath) } }
+                }
+            }));
+
+            // Add the operation to rename the folder itself
+            updateOps.push({
+                updateOne: {
+                    filter: { _id: itemToUpdate._id },
+                    update: { $set: { name: newPath } }
+                }
+            });
+
+            // Execute all updates
+            if (updateOps.length > 0) {
+                await File.bulkWrite(updateOps);
+            }
+        }
+        // --- END RECURSIVE RENAME ---
+        else {
+             // For a simple file rename or content update, just update the single document
+             await File.findByIdAndUpdate(req.params.id, { $set: newValues });
+        }
+
+        const updatedItem = await File.findById(req.params.id);
+        res.json(updatedItem);
+
     } catch (err) {
+        if (err.code === 11000) {
+             return res.status(409).json({ message: 'An item with that name already exists.' });
+        }
         res.status(400).json({ message: err.message });
     }
 };
-
 // DELETE AN ITEM (file or folder)
 exports.deleteFile = async (req, res) => {
     try {

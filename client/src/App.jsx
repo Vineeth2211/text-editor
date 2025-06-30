@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import Sidebar from './components/SideBar';
+import Sidebar from './components/Sidebar';
 import EditorView from './components/EditorView';
 import Tabs from './components/Tabs';
 import MenuBar from './components/MenuBar';
@@ -151,34 +151,6 @@ function App() {
         }
     };
     
-    const handleDeleteFile = async (fileId) => {
-        if (!window.confirm(`Are you sure you want to delete this file?`)) return;
-        try {
-            await axios.delete(`${API_URL}/${fileId}`);
-            await fetchFiles();
-            handleCloseTab(fileId);
-        } catch (error) {
-            alert(`Error: ${error.response?.data?.message || 'Could not delete item.'}`);
-        }
-    };
-
-    const handleFinishRename = async (fileId, newName) => {
-        const originalFile = files.find(f => f._id === fileId);
-        if (!newName || (originalFile && newName === originalFile.name)) {
-            setRenamingFileId(null);
-            return;
-        }
-        try {
-            await axios.put(`${API_URL}/${fileId}`, { name: newName });
-            await fetchFiles();
-            setTabs(tabs.map(t => t.id === fileId ? { ...t, name: newName, language: getLanguageFromFileName(newName) } : t));
-            await axios.post(`${API_URL}/sync/${fileId}`);
-        } catch (error) {
-            alert(`Error renaming file: ${error.response?.data?.message}`);
-        } finally {
-            setRenamingFileId(null);
-        }
-    };
     
     const handleDownload = () => {
         const tab = getActiveTab();
@@ -222,6 +194,85 @@ function App() {
         }
     };
 
+    // In App.jsx, add these new functions
+
+    // In App.jsx...
+const handleCreateItemInSidebar = (type, parentPath) => {
+    console.log(`App.jsx: handleCreateItemInSidebar called with type: '${type}', parentPath: ${parentPath}`);
+    
+    const tempId = `new-item-${Date.now()}`;
+    const newItem = { _id: tempId, name: parentPath ? `${parentPath}/` : '', type: type };
+    
+    console.log("App.jsx: Creating temporary new item:", newItem);
+
+    setFiles(prevFiles => {
+        const newFiles = [...prevFiles, newItem];
+        console.log("App.jsx: State is being set. New files array will be:", newFiles);
+        return newFiles;
+    });
+
+    setRenamingFileId(tempId);
+    console.log(`App.jsx: Set renamingFileId to: ${tempId}`);
+};
+
+    // In App.jsx...
+
+    const handleFinishRename = async (itemId, newFullName) => {
+        const item = files.find(f => f._id === itemId);
+        if (!item) return;
+
+        if (!newFullName || newFullName === item.name) {
+            if (itemId.startsWith('new-')) setFiles(files.filter(f => f._id !== itemId));
+            setRenamingFileId(null);
+            return;
+        }
+
+        if (item._id.startsWith('new-')) { // CREATING
+            try {
+                await axios.post(API_URL, {
+                    name: newFullName,
+                    type: item.type,
+                    language: item.type === 'file' ? getLanguageFromFileName(newFullName) : undefined
+                });
+                await fetchFiles();
+            } catch (error) {
+                alert(`Error creating item: ${error.response?.data?.message}`);
+                setFiles(files.filter(f => f._id !== itemId));
+            }
+        } else { // RENAMING
+            try {
+                // The newFullName is the complete, correct new path.
+                await axios.put(`${API_URL}/${itemId}`, { name: newFullName });
+                await fetchFiles(); // This single call will get all the updated paths.
+                
+                // We need to refresh tabs based on the new data from the server
+                const newFileList = await axios.get(API_URL);
+                const updatedTabs = tabs.map(t => {
+                    const newFileData = newFileList.data.find(f => f._id === t.id);
+                    return newFileData ? { ...t, name: newFileData.name, language: getLanguageFromFileName(newFileData.name) } : t;
+                }).filter(Boolean); // Filter out any tabs for deleted files
+                setTabs(updatedTabs);
+
+            } catch (error) {
+                alert(`Error renaming item: ${error.response?.data?.message}`);
+            }
+        }
+        setRenamingFileId(null);
+    };
+
+    const handleDeleteFile = async (itemId, itemType) => {
+        // We will add logic for recursive folder deletion later.
+        // For now, it will only delete files or empty folders.
+        if (!window.confirm(`Are you sure you want to delete this ${itemType}?`)) return;
+        try {
+            await axios.delete(`${API_URL}/${itemId}`);
+            await fetchFiles();
+            if (itemType === 'file') handleCloseTab(itemId);
+        } catch (error) {
+            alert(`Error: ${error.response?.data?.message || 'Could not delete item.'}`);
+        }
+    };
+
     return (
         <div className="app-container">
             <MenuBar 
@@ -240,10 +291,11 @@ function App() {
                         <Sidebar 
                             files={files} 
                             onOpenFile={handleOpenFile}
-                            onNewFile={handleNewFile}
-                            onDeleteFile={handleDeleteFile}
+                            onNewFile={(parentPath) => handleCreateItemInSidebar('file', parentPath)}
+                            onNewFolder={(parentPath) => handleCreateItemInSidebar('folder', parentPath)}
+                            onRename={setRenamingFileId}
+                            onDelete={handleDeleteFile}
                             renamingFileId={renamingFileId}
-                            setRenamingFileId={setRenamingFileId}
                             onFinishRename={handleFinishRename}
                         />
                     </Panel>

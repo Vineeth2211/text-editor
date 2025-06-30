@@ -525,3 +525,83 @@ body {
 .tree-children {
   padding-left: 20px; /* This creates the indentation */
 }
+
+/* ========================================= */
+/*  CONTEXT MENU STYLES                      */
+/* ========================================= */
+.context-menu {
+  position: absolute; /* The menu is positioned relative to the actions div */
+  top: 100%; /* Position it right below the button */
+  right: 0;  /* Align it to the right edge */
+  background-color: #252526;
+  border: 1px solid #444;
+  border-radius: 4px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  min-width: 150px;
+  padding: 5px 0;
+  list-style: none;
+  margin: 0;
+  width: 20px;
+}
+
+.context-menu-item {
+  padding: 8px 15px;
+  cursor: pointer;
+  color: #cccccc;
+}
+
+.context-menu-item:hover {
+  background-color: #094771;
+}
+
+.context-menu .separator {
+    height: 1px;
+    background-color: #444;
+    margin: 4px 0;
+}
+
+.new-item-input-container {
+    display: flex;
+    align-items: center;
+    padding: 6px 10px;
+    background-color: #383838;
+}
+
+.sidebar-header-actions {
+    position: relative; /* This is the anchor for the dropdown menu */
+}
+
+.dropdown-plus-button {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background-color: #252526;
+  border: 1px solid #444;
+  border-radius: 4px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  min-width: 150px;
+  padding: 5px 0;
+  list-style: none;
+  margin: 0;
+}
+
+.sidebar-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.sidebar-action-btn {
+    background: none;
+    border: none;
+    color: #d4d4d4;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 4px;
+    border-radius: 3px;
+}
+
+.sidebar-action-btn:hover {
+    background-color: #383838;
+}

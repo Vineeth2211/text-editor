@@ -8,6 +8,7 @@ import Tabs from './components/Tabs';
 import MenuBar from './components/MenuBar';
 import SettingsPanel from './components/SettingsPanel';
 import TerminalView from './components/TerminalView';
+import FindReplace from './components/FindReplace'; 
 import './App.css';
 import { arrayMove } from '@dnd-kit/sortable';
 import prettier from "prettier/standalone";
@@ -27,6 +28,8 @@ function App() {
     const [isTerminalOpen, setIsTerminalOpen] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [settings, setSettings] = useState({ theme: 'vs-dark', fontSize: 14, tabSize: 4, wordWrap: 'off' });
+    const [isFindReplaceVisible, setIsFindReplaceVisible] = useState(false);
+    const [findReplaceMode, setFindReplaceMode] = useState('find');
 
     useEffect(() => { fetchFiles(); }, []);
     useEffect(() => {
@@ -52,8 +55,19 @@ function App() {
                     case 'n': event.preventDefault(); handleNewFile(); break;
                     case 'w': event.preventDefault(); if (activeTabId) handleCloseTab(activeTabId); break;
                     case '`': event.preventDefault(); setIsTerminalOpen(open => !open); break; 
+                    case 'f':
+                        event.preventDefault();
+                        handleOpenFind();
+                        break;
+                    case 'h':
+                        event.preventDefault();
+                        handleOpenReplace();
+                        break;
                     default: break;
                 }
+            }
+            if (event.key === 'Escape') {
+                setIsFindReplaceVisible(false);
             }
         };
         window.addEventListener('keydown', handleKeyDown);
@@ -273,6 +287,16 @@ const handleCreateItemInSidebar = (type, parentPath) => {
         }
     };
 
+    const handleOpenFind = () => {
+        setFindReplaceMode('find');
+        setIsFindReplaceVisible(true);
+    };
+
+    const handleOpenReplace = () => {
+        setFindReplaceMode('replace');
+        setIsFindReplaceVisible(true);
+    };
+
     return (
         <div className="app-container">
             <MenuBar 
@@ -284,6 +308,8 @@ const handleCreateItemInSidebar = (type, parentPath) => {
                 onRename={() => activeTabId && setRenamingFileId(activeTabId)}
                 onFormatCode={handleFormatCode}
                 onToggleTerminal={() => setIsTerminalOpen(open => !open)}
+                onFind={handleOpenFind}      // Add this
+                onReplace={handleOpenReplace}
             />
             <div className="content-wrapper">
                 <PanelGroup direction="horizontal">
@@ -304,6 +330,12 @@ const handleCreateItemInSidebar = (type, parentPath) => {
                         <PanelGroup direction="vertical">
                             <Panel id="editor" minSize={20}>
                                 <div className="editor-area-container">
+                                    <FindReplace 
+                                        editorRef={editorRef} 
+                                        isVisible={isFindReplaceVisible}
+                                        mode={findReplaceMode} // Pass the mode
+                                        onClose={() => setIsFindReplaceVisible(false)}
+                                    />
                                     <Tabs
                                         tabs={tabs}
                                         activeTabId={activeTabId}

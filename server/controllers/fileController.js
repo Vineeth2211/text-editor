@@ -135,35 +135,60 @@ exports.updateFile = async (req, res) => {
     }
 };
 // DELETE AN ITEM (file or folder)
+// In controllers/fileController.js...
+
+// DELETE AN ITEM (file or folder with its contents)
 exports.deleteFile = async (req, res) => {
     try {
-        const fileToDelete = await File.findById(req.params.id);
-        if (!fileToDelete) {
-            return res.status(404).json({ message: 'File not found' });
+        const itemToDelete = await File.findById(req.params.id);
+        if (!itemToDelete) {
+            return res.status(404).json({ message: 'Item not found' });
         }
 
-        // --- SAFETY CHECK: If it's a folder, ensure it's empty ---
-        if (fileToDelete.type === 'folder') {
-            // Check if any other item's path starts with this folder's path
-            const children = await File.find({ 
-                name: { $regex: `^${fileToDelete.name}/`, $options: 'i' } 
+        // --- START: Recursive Deletion Logic ---
+        if (itemToDelete.type === 'folder') {
+            // If it's a folder, we delete it AND all its descendants.
+            // The regex `^${itemToDelete.name}/` finds all children.
+            // The regex `^${itemToDelete.name}$` finds the folder itself.
+            const deleteQuery = {
+                name: { $regex: `^${itemToDelete.name}(/|$)` }
+            };
+            
+            // Find all items to be deleted to clean up the workspace
+            const itemsForWorkspaceCleanup = await File.find(deleteQuery).select('name');
+
+            // Perform the deletion in the database
+            await File.deleteMany(deleteQuery);
+
+            // Clean up the physical workspace
+            const workspaceDir = path.join(__dirname, '..', 'workspace');
+            itemsForWorkspaceCleanup.forEach(item => {
+                const itemPath = path.join(workspaceDir, item.name);
+                if (fs.existsSync(itemPath)) {
+                    // Use rmSync for folders, unlinkSync for files
+                    // For simplicity, we can try a generic approach
+                    try {
+                        fs.rmSync(itemPath, { recursive: true, force: true });
+                    } catch (e) {
+                        console.error(`Failed to delete from workspace: ${itemPath}`, e);
+                    }
+                }
             });
-            if (children.length > 0) {
-                return res.status(400).json({ message: 'Cannot delete a non-empty folder.' });
+
+        } else {
+            // If it's just a file, delete only that one document.
+            await File.findByIdAndDelete(req.params.id);
+
+            // Clean up the single file from the physical workspace
+            const workspaceDir = path.join(__dirname, '..', 'workspace');
+            const filePath = path.join(workspaceDir, itemToDelete.name);
+            if (fs.existsSync(filePath)) {
+                fs.unlinkSync(filePath);
             }
         }
+        // --- END: Recursive Deletion Logic ---
 
-        // If it's a file or an empty folder, proceed with deletion
-        await File.findByIdAndDelete(req.params.id);
-
-        // Also delete from the physical workspace
-        const workspaceDir = path.join(__dirname, '..', 'workspace');
-        const filePath = path.join(workspaceDir, fileToDelete.name);
-        if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
-        }
-
-        res.json({ message: 'Item deleted successfully' });
+        res.json({ message: 'Item(s) deleted successfully' });
     } catch (err) {
         res.status(500).json({ message: err.message });
     }

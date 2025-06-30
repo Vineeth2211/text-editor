@@ -15,7 +15,7 @@ const FileSchema = new mongoose.Schema({
     language: {
         type: String,
     },
-    // New field to distinguish between file and folder
+    // New field to distinguish between 'file' and 'folder'
     type: {
         type: String,
         enum: ['file', 'folder'], // Only allow these two values

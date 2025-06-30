@@ -2,10 +2,11 @@ const fs = require('fs');
 const path = require('path');
 const File = require('../models/File');
 
-// GET ALL ITEMS (files and folders)
+// In controllers/fileController.js
+
 exports.getFiles = async (req, res) => {
     try {
-        // Select the new 'type' field as well
+        // Ensure 'type' is included in the select statement
         const files = await File.find().select('name language _id createdAt updatedAt type');
         res.json(files);
     } catch (err) {
@@ -25,33 +26,57 @@ exports.getFileById = async (req, res) => {
 };
 
 // CREATE A NEW ITEM (file or folder)
+// In controllers/fileController.js
+
+// In controllers/fileController.js
+
+// This is the new, intelligent createFile function.
 exports.createFile = async (req, res) => {
-    // We now expect 'name' (which is the full path) and 'type'
     const { name, type, content = '', language = '' } = req.body;
 
     if (!name || !type) {
         return res.status(400).json({ message: 'Name and type are required' });
     }
 
-    const newItem = new File({
-        name,
-        type,
-        content: type === 'file' ? content : undefined,
-        language: type === 'file' ? language : undefined,
-    });
-
     try {
+        // --- START: Ensure parent directories exist ---
+        const pathParts = name.split('/');
+        // We only care about the directories, not the file/folder name itself at the end
+        if (pathParts.length > 1) {
+            const directories = pathParts.slice(0, -1);
+            let currentPath = '';
+            for (const dir of directories) {
+                currentPath = currentPath ? `${currentPath}/${dir}` : dir;
+                // This is an "upsert": find a folder with this path, or create it if it doesn't exist.
+                // This is the most important part of the fix.
+                await File.findOneAndUpdate(
+                    { name: currentPath, type: 'folder' },
+                    { $setOnInsert: { name: currentPath, type: 'folder' } },
+                    { upsert: true, new: true }
+                );
+            }
+        }
+        // --- END: Ensure parent directories exist ---
+
+        // Now, create the actual file or folder the user requested
+        const newItemData = {
+            name,
+            type,
+            content: type === 'file' ? content : undefined,
+            language: type === 'file' ? language : undefined,
+        };
+        const newItem = new File(newItemData);
         const savedItem = await newItem.save();
+        
         res.status(201).json(savedItem);
+
     } catch (err) {
-        // Handle unique name constraint error
         if (err.code === 11000) {
             return res.status(409).json({ message: 'An item with this name already exists.' });
         }
         res.status(400).json({ message: err.message });
     }
 };
-
 // Update a file (renaming or content change)
 exports.updateFile = async (req, res) => {
     try {
